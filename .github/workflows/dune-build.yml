@@ -1,0 +1,29 @@
+name: Build USTB Dune queries
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Fail fast if DUNE_API_KEY secret is missing
+        env:
+          DUNE_API_KEY: ${{ secrets.DUNE_API_KEY }}
+        run: |
+          if [ -z "$DUNE_API_KEY" ]; then
+            echo "::error::DUNE_API_KEY repository secret is not set."
+            echo "Add it at Settings -> Secrets and variables -> Actions -> New repository secret."
+            exit 1
+          fi
+
+      - name: Create queries and run validation scalars
+        env:
+          DUNE_API_KEY: ${{ secrets.DUNE_API_KEY }}
+        run: python3 scripts/build_dune_dashboard.py

@@ -31,10 +31,16 @@ done manually (or rerun with Dune MCP available).
 
 ### Option A — automated (requires Dune Plus for saved-query API)
 
+Either run locally:
+
 ```
 export DUNE_API_KEY=...
 python3 scripts/build_dune_dashboard.py
 ```
+
+Or trigger the **Build USTB Dune queries** workflow from the Actions tab
+(requires a `DUNE_API_KEY` repository secret). Both paths run the same
+script.
 
 The script creates all 7 queries in your Dune account, executes
 `00_validation_scalars.sql`, prints the supply/holder numbers, and lists
