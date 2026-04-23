@@ -9,11 +9,11 @@ Government Securities Fund) on Ethereum mainnet.
 
 ## Status
 
-The SQL in `sql/` is ready to paste into Dune. This repo does **not**
-execute the queries or create the dashboard automatically — the environment
-that generated these files did not have a Dune MCP server attached, so the
-`~65.3M supply` / `~99 holder` validation and dashboard creation need to be
-done manually (or rerun with Dune MCP available).
+The SQL in `sql/` is ready. The repo ships a `.mcp.json` wiring up
+[Dune's official MCP server](https://docs.dune.com/api-reference/agents/mcp),
+which exposes query + dashboard tools; with it attached, creation,
+validation, and dashboard assembly all run end-to-end from an agent.
+A Python/GitHub-Actions fallback is included for CI or non-agent use.
 
 ## Queries
 
@@ -29,31 +29,37 @@ done manually (or rerun with Dune MCP available).
 
 ## Setup
 
-### Option A — automated (requires Dune Plus for saved-query API)
+### Option A — fully automated via Dune MCP (recommended)
 
-Either run locally:
+1. `export DUNE_API_KEY=<your Analyst-tier key>`
+2. Open this repo in Claude Code (or any MCP-compatible agent). The
+   `.mcp.json` loads the Dune MCP server automatically and expands
+   `${DUNE_API_KEY}` into the `X-DUNE-API-KEY` header.
+3. Ask the agent to create the 7 queries (SQL is in `sql/`), run
+   `00_validation_scalars.sql` against 65.3M / 99, and build a
+   dashboard. The MCP exposes tools for all three, so this is one
+   conversation end-to-end — no UI clicks.
+
+### Option B — Python / GitHub Actions fallback
+
+Run locally:
 
 ```
 export DUNE_API_KEY=...
 python3 scripts/build_dune_dashboard.py
 ```
 
-Or trigger the **Build USTB Dune queries** workflow from the Actions tab
-(requires a `DUNE_API_KEY` repository secret). It also runs on push when
-`sql/` or the builder changes. Both paths run the same script.
+Or trigger the **Build USTB Dune queries** workflow from the Actions
+tab (requires a `DUNE_API_KEY` repository secret). It also runs on
+push when `sql/` or the builder changes.
 
-The script is idempotent: the first run creates 7 saved queries and
-writes their IDs to `.dune_query_ids.json`; subsequent runs PATCH the
-same queries in place, so re-running never creates duplicates in your
-Dune account.
+The script is idempotent: it persists query IDs to
+`.dune_query_ids.json` and PATCHes existing queries on re-run instead
+of creating duplicates. It stops after validation — Dune's REST API
+has no dashboard-creation endpoint, so dashboard assembly under this
+option is still a web-UI step. Prefer Option A when you can.
 
-The script creates all 7 queries in your Dune account, executes
-`00_validation_scalars.sql`, prints the supply/holder numbers, and lists
-the query IDs. Dashboard assembly is still manual (Dune has no public
-dashboard-creation endpoint): open <https://dune.com/browse/dashboards>,
-click **New dashboard**, and add a visualization from each query.
-
-### Option B — fully manual
+### Option C — fully manual
 
 1. Go to <https://dune.com/queries> and create a new query for each file
    in `sql/`. Paste the SQL, name the query (e.g. `USTB — Cumulative Supply`),
