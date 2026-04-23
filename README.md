@@ -29,6 +29,21 @@ done manually (or rerun with Dune MCP available).
 
 ## Setup
 
+### Option A — automated (requires Dune Plus for saved-query API)
+
+```
+export DUNE_API_KEY=...
+python3 scripts/build_dune_dashboard.py
+```
+
+The script creates all 7 queries in your Dune account, executes
+`00_validation_scalars.sql`, prints the supply/holder numbers, and lists
+the query IDs. Dashboard assembly is still manual (Dune has no public
+dashboard-creation endpoint): open <https://dune.com/browse/dashboards>,
+click **New dashboard**, and add a visualization from each query.
+
+### Option B — fully manual
+
 1. Go to <https://dune.com/queries> and create a new query for each file
    in `sql/`. Paste the SQL, name the query (e.g. `USTB — Cumulative Supply`),
    run, and save.
