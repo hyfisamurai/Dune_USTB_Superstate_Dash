@@ -1,22 +1,24 @@
 #!/usr/bin/env python3
 """
-Create, execute, and validate the USTB Dune queries via the Dune API.
+Create/update, execute, and validate the USTB Dune queries via the Dune API.
 
 Usage:
     export DUNE_API_KEY=...
     python scripts/build_dune_dashboard.py
 
-What it does:
-  1. Reads every SQL file in ../sql/
-  2. Creates a saved query in Dune for each
-  3. Executes the validation scalar query synchronously
-  4. Prints query IDs + URLs plus the validation numbers (target ~65.3M / ~99)
+Behavior:
+  - Reads every SQL file in ../sql/.
+  - Looks up persisted query IDs in ../.dune_query_ids.json.
+  - For files without a saved ID, POSTs /query to create a saved query and
+    records the new ID.
+  - For files with a saved ID, PATCHes /query/{id} to update the SQL in place.
+  - Executes the validation scalar query synchronously and prints
+    total_supply / holder_count (targets: ~65.3M / ~99).
+  - Writes the updated ID map back to ../.dune_query_ids.json.
 
-What it does NOT do:
-  - Create the dashboard itself. Dune's dashboard-creation endpoints are
-    unstable / partially unavailable via public API. After this script runs,
-    open https://dune.com/browse/dashboards, click "New dashboard", and add
-    each query's saved visualization.
+Requires an Analyst-tier Dune key for query CRUD. The dashboard itself is not
+created here — Dune's public API has no dashboard-creation endpoint. Open
+https://dune.com/browse/dashboards and add one tile per query.
 """
 
 from __future__ import annotations
@@ -29,7 +31,9 @@ from pathlib import Path
 from urllib import request, error
 
 API_BASE = "https://api.dune.com/api/v1"
-SQL_DIR = Path(__file__).resolve().parent.parent / "sql"
+REPO_ROOT = Path(__file__).resolve().parent.parent
+SQL_DIR = REPO_ROOT / "sql"
+IDS_FILE = REPO_ROOT / ".dune_query_ids.json"
 
 
 def api_key() -> str:
@@ -58,6 +62,16 @@ def call(method: str, path: str, body: dict | None = None) -> dict:
         sys.exit(f"{method} {path} -> HTTP {e.code}: {e.read().decode(errors='replace')}")
 
 
+def load_ids() -> dict[str, int]:
+    if not IDS_FILE.exists():
+        return {}
+    return json.loads(IDS_FILE.read_text())
+
+
+def save_ids(ids: dict[str, int]) -> None:
+    IDS_FILE.write_text(json.dumps(ids, indent=2, sort_keys=True) + "\n")
+
+
 def create_query(name: str, sql: str) -> int:
     resp = call("POST", "/query", {
         "name": name,
@@ -65,6 +79,13 @@ def create_query(name: str, sql: str) -> int:
         "is_private": False,
     })
     return int(resp["query_id"])
+
+
+def update_query(query_id: int, name: str, sql: str) -> None:
+    call("PATCH", f"/query/{query_id}", {
+        "name": name,
+        "query_sql": sql,
+    })
 
 
 def execute_and_wait(query_id: int, poll_seconds: float = 2.0, timeout_seconds: float = 300) -> dict:
@@ -87,17 +108,23 @@ def main() -> None:
     if not files:
         sys.exit(f"No SQL files found in {SQL_DIR}")
 
-    created: list[tuple[str, int]] = []
+    ids = load_ids()
     validation_query_id: int | None = None
 
     for f in files:
         sql = f.read_text()
         name = f"USTB - {f.stem}"
-        print(f"Creating query {name!r}...", flush=True)
-        qid = create_query(name, sql)
-        url = f"https://dune.com/queries/{qid}"
-        created.append((f.name, qid))
-        print(f"  -> id={qid}  {url}")
+        existing = ids.get(f.name)
+        if existing is None:
+            print(f"Creating query {name!r}...", flush=True)
+            qid = create_query(name, sql)
+            ids[f.name] = qid
+            save_ids(ids)
+        else:
+            qid = existing
+            print(f"Updating query {name!r} (id={qid})...", flush=True)
+            update_query(qid, name, sql)
+        print(f"  -> id={qid}  https://dune.com/queries/{qid}")
         if f.name.startswith("00_"):
             validation_query_id = qid
 
@@ -123,8 +150,8 @@ def main() -> None:
 
     print()
     print("Next step: open https://dune.com/browse/dashboards, create a new")
-    print("dashboard, and add a visualization from each of these query IDs:")
-    for name, qid in created:
+    print("dashboard, and add a visualization from each of these queries:")
+    for name, qid in sorted(ids.items()):
         print(f"  {name:<45}  https://dune.com/queries/{qid}")
 
 

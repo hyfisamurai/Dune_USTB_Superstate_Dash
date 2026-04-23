@@ -39,8 +39,13 @@ python3 scripts/build_dune_dashboard.py
 ```
 
 Or trigger the **Build USTB Dune queries** workflow from the Actions tab
-(requires a `DUNE_API_KEY` repository secret). Both paths run the same
-script.
+(requires a `DUNE_API_KEY` repository secret). It also runs on push when
+`sql/` or the builder changes. Both paths run the same script.
+
+The script is idempotent: the first run creates 7 saved queries and
+writes their IDs to `.dune_query_ids.json`; subsequent runs PATCH the
+same queries in place, so re-running never creates duplicates in your
+Dune account.
 
 The script creates all 7 queries in your Dune account, executes
 `00_validation_scalars.sql`, prints the supply/holder numbers, and lists

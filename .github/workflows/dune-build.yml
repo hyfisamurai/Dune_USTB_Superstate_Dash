@@ -2,6 +2,16 @@ name: Build USTB Dune queries
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - claude/ustb-dune-dashboard-qShLx
+    paths:
+      - "sql/**"
+      - "scripts/build_dune_dashboard.py"
+      - ".github/workflows/dune-build.yml"
+
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -23,7 +33,19 @@ jobs:
             exit 1
           fi
 
-      - name: Create queries and run validation scalars
+      - name: Create or update queries and run validation scalars
         env:
           DUNE_API_KEY: ${{ secrets.DUNE_API_KEY }}
         run: python3 scripts/build_dune_dashboard.py
+
+      - name: Commit query ID map if changed
+        run: |
+          if [ -n "$(git status --porcelain .dune_query_ids.json)" ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add .dune_query_ids.json
+            git commit -m "Persist Dune query IDs from workflow run"
+            git push
+          else
+            echo "No change to .dune_query_ids.json"
+          fi
